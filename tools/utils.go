@@ -1,22 +1,20 @@
-package pkg
+package tools
 
 import (
 	"crypto/rand"
 	"encoding/base64"
-	"errors"
-	"strconv"
+	"fmt"
 	"strings"
 )
 
 var (
-	// DefaultParams is the default hash parameters.
 	DefaultParams = HashParams{
 		Cost:        14,
 		Rounds:      8,
 		Parallelism: 1,
-		SaltLength:  32,
-		DKLen:       16,
-		SignerKey:   "",
+		SaltLength:  24,
+		DKLen:       32,
+		Identifier:  "c.1",
 	}
 )
 
@@ -36,8 +34,8 @@ func (h *HashParams) CheckAndSetDefault() {
 	if h.DKLen == 0 {
 		h.DKLen = DefaultParams.DKLen
 	}
-	if h.SignerKey == "" {
-		h.SignerKey = DefaultParams.SignerKey
+	if h.Identifier == EmptyString {
+		h.Identifier = DefaultParams.Identifier
 	}
 }
 
@@ -70,41 +68,28 @@ func Decode(cipher string) ([]byte, error) {
 	return base64.RawStdEncoding.DecodeString(cipher)
 }
 
-func SeprateHashParams(hash string) (string, string, HashParams, error) {
-	var params HashParams
+func GenerateWithParams(cipher, salt []byte, cost, rounds, saltlen, dklen int, identifier, seprator string) ([]byte, error) {
+	cipherB64, saltB64 := Encode(cipher), Encode(salt)
 
-	if hash == "" {
-		return "", "", params, errors.New("Err: It seems that you have not provided a hash to seprate")
-	}
+	params := fmt.Sprintf("$%d$%d$%d$%d", cost, rounds, saltlen, dklen)
 
-	d := strings.Split(hash, "$")
-	if len(d) < 4 {
-		return "", "", params, errors.New("Err: It seems that you have not provided a valid hash")
-	}
-	saltLen, err := strconv.Atoi(d[1])
+	paramsB64 := Encode([]byte(params))
 
-	if err != nil {
-		return "", "", params, errors.New("Err: It seems that you have not provided a valid hash")
-	}
+	hash := fmt.Sprintf("$%s$%s$%s%s", identifier, paramsB64, saltB64, cipherB64)
 
-	cost, err := strconv.Atoi(d[2])
-	if err != nil {
-		return "", "", params, errors.New("Err: It seems that you have not provided a valid hash")
-	}
+	return []byte(hash), nil
+}
 
-	rounds, err := strconv.Atoi(d[3])
-	if err != nil {
-		return "", "", params, errors.New("Err: It seems that you have not provided a valid hash")
-	}
+func SeprateParams(hash string) (string, string, string, string, error) {
+	var identifier, params, salt, cipher string
 
-	params = HashParams{
-		Cost:       cost,
-		Rounds:     rounds,
-		SaltLength: saltLen,
-	}
+	identifier = hash[1:3]
 
-	salt := d[4][:saltLen]
-	cipher := d[4][saltLen:]
+	params = hash[4 : strings.Index(hash[4:], "$")+4]
 
-	return salt, cipher, params, nil
+	salt = hash[strings.Index(hash[4:], "$")+5 : strings.Index(hash[strings.Index(hash[4:], "$")+5:], "$")+strings.Index(hash[4:], "$")+5]
+
+	cipher = hash[strings.Index(hash[strings.Index(hash[4:], "$")+5:], "$")+strings.Index(hash[4:], "$")+5:]
+
+	return identifier, params, salt, cipher, nil
 }

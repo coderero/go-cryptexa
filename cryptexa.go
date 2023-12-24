@@ -1,58 +1,54 @@
-package main
+package cryptexa
 
 import (
-	"fmt"
+	"crypto/subtle"
 
-	"github.com/coderero/go-cryptexa/pkg"
+	"github.com/coderero/go-cryptexa/tools"
 	"golang.org/x/crypto/scrypt"
 )
 
-var (
-	name = "cryptexa"
-)
-
-type Params struct {
-	HashKey    string
-	HashParams pkg.HashParams
-	Salt       []byte
+func HashOnly(password string, salt []byte, cost int, rounds int, parallelism int, dkLen int) ([]byte, error) {
+	hash, err := scrypt.Key([]byte(password), salt, 1<<uint(cost), rounds, parallelism, dkLen)
+	if err != nil {
+		return nil, err
+	}
+	return hash, nil
 }
 
-func GenerateHash(password string, params ...Params) (string, error) {
-	var p Params
-	if len(params) > 0 {
-		p = params[0]
-	} else {
-		p = Params{
-			HashParams: pkg.DefaultParams,
-		}
-	}
-
-	var salt []byte
-	p.HashParams.CheckAndSetDefault()
-	if p.Salt != nil {
-		salt = p.Salt
-	} else {
-		b, err := pkg.GenerateSaltBytes(p.HashParams.SaltLength)
-		if err != nil {
-			return "", err
-		}
-		salt = b
-	}
-
-	cipher, err := scrypt.Key([]byte(password), salt, 1<<uint(p.HashParams.Cost), p.HashParams.Rounds, p.HashParams.Parallelism, p.HashParams.DKLen)
+func CompareHashOnly(password string, salt []byte, cost int, rounds int, parallelism int, dkLen int, hash []byte) (bool, error) {
+	compareHash, err := HashOnly(password, salt, cost, rounds, parallelism, dkLen)
 	if err != nil {
-		return "", err
+		return false, err
 	}
-	encodedCipher := pkg.Encode(cipher)
-	encodedSalt := pkg.Encode(salt)
+	return subtle.ConstantTimeCompare(hash, compareHash) == 1, nil
+}
 
-	var HashKey string
-	if p.HashKey != "" {
-		HashKey = p.HashKey
-	} else {
-		HashKey = name
+func GenerateHash(password string, params ...tools.HashParams) ([]byte, error) {
+	var h tools.HashParams
+	if len(params) > 0 {
+		h = params[0]
+	}
+	h.CheckAndSetDefault()
+
+	if h.Salt == nil {
+		salt, err := tools.GenerateSaltBytes(h.SaltLength)
+		if err != nil {
+			return nil, err
+		}
+		h.Salt = salt
 	}
 
-	storeable := fmt.Sprintf("$%s$%d$%d$%d$%s%s", HashKey, len(salt), p.HashParams.Cost, p.HashParams.Rounds, encodedSalt, encodedCipher)
-	return storeable, nil
+	hash, err := HashOnly(password, h.Salt, h.Cost, h.Rounds, h.Parallelism, h.DKLen)
+
+	if err != nil {
+		return nil, err
+	}
+
+	hashByte, err := tools.GenerateWithParams(hash, h.Salt, h.Cost, h.Rounds, h.SaltLength, h.DKLen, h.Identifier, h.SaltSeprarator)
+	if err != nil {
+		return nil, err
+	}
+
+	return hashByte, nil
+
 }

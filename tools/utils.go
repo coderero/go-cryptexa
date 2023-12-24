@@ -75,21 +75,32 @@ func GenerateWithParams(cipher, salt []byte, cost, rounds, saltlen, dklen int, i
 
 	paramsB64 := Encode([]byte(params))
 
-	hash := fmt.Sprintf("$%s$%s$%s%s", identifier, paramsB64, saltB64, cipherB64)
+	if seprator != " " {
+		seprator = ""
+	}
+	hash := fmt.Sprintf("$%s$%s$%s%s%s", identifier, paramsB64, saltB64, seprator, cipherB64)
 
 	return []byte(hash), nil
 }
 
-func SeprateParams(hash string) (string, string, string, string, error) {
+func SeprateParams(hash, seprator string) (string, string, string, string, error) {
 	var identifier, params, salt, cipher string
 
 	identifier = hash[1:3]
 
 	params = hash[4 : strings.Index(hash[4:], "$")+4]
 
-	salt = hash[strings.Index(hash[4:], "$")+5 : strings.Index(hash[strings.Index(hash[4:], "$")+5:], "$")+strings.Index(hash[4:], "$")+5]
+	if seprator != " " {
+		seprator = ""
+	}
 
-	cipher = hash[strings.Index(hash[strings.Index(hash[4:], "$")+5:], "$")+strings.Index(hash[4:], "$")+5:]
+	if seprator != "" {
+		salt = hash[strings.Index(hash[4:], "$")+5 : strings.Index(hash[strings.Index(hash[4:], "$")+5:], seprator)]
+		cipher = hash[strings.Index(hash[strings.Index(hash[4:], "$")+5:], seprator)+1:]
+	} else {
+		salt = hash[strings.Index(hash[4:], "$")+5 : strings.Index(hash[strings.Index(hash[4:], "$")+5:], "$")]
+		cipher = hash[strings.Index(hash[strings.Index(hash[4:], "$")+5:], "$")+1:]
+	}
 
 	return identifier, params, salt, cipher, nil
 }
